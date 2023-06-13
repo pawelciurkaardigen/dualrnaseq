@@ -126,7 +126,7 @@ def RNA_classes_for_each_sample(
     df_RNA_classes_sum_counts_all_samples = df_RNA_classes_sum_counts_all_samples.dropna()
 
     # check it data frame contains any non zero value.
-    # If so, teturn 'true' and plot RNA class statistics in another process
+    # If so, return 'true' and plot RNA class statistics in another process
     non_zero = df_RNA_classes_sum_counts_all_samples.any()
     if non_zero.any():
         print("true")

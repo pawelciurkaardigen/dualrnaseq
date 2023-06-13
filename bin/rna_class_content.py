@@ -127,47 +127,62 @@ def RNA_classes_for_each_sample(
     df_percentage_RNA_all_samples.to_csv(organism + "_RNA_classes_percentage_" + quantifier + ".tsv", sep="\t")
 
 
-parser = argparse.ArgumentParser(description="""RNA class statistics""")
-parser.add_argument(
-    "-q", "--quantification_table", metavar="<quantification_table>", help="Path to the quantification table"
-)
-parser.add_argument("-a", "--gene_attribute", help="gene attribute")
-parser.add_argument("-annotations", "--gene_annotations", help="gene annotations")
-parser.add_argument("-q_tool", "--quantifier", metavar="<quantifier>", help="name of the quantifier")
-parser.add_argument("-org", "--organism", help="host or pathogen")
-parser.add_argument("-rna", "--rna_classes", help="group of RNA classes to be replaced", default="")
-parser.add_argument("-o", "--output_dir", metavar="<output>", help="output dir", default=".")
+def parse_args():
+    parser = argparse.ArgumentParser(description="""RNA class statistics""")
+    parser.add_argument(
+        "-q", "--quantification_table", metavar="<quantification_table>", help="Path to the quantification table"
+    )
+    parser.add_argument("-a", "--gene_attribute", help="gene attribute")
+    parser.add_argument("-annotations", "--gene_annotations", help="gene annotations")
+    parser.add_argument("-q_tool", "--quantifier", metavar="<quantifier>", help="name of the quantifier")
+    parser.add_argument("-org", "--organism", help="host or pathogen")
+    parser.add_argument("-rna", "--rna_classes", help="group of RNA classes to be replaced", default="")
+    parser.add_argument("-o", "--output_dir", metavar="<output>", help="output dir", default=".")
+
+    args = parser.parse_args()
+
+    return args
 
 
-args = parser.parse_args()
-
-
-if args.organism == "pathogen":
+def process_pathogen(gene_annotations, gene_attribute):
     # read annotation file
-    gene_types_df = pd.read_csv(args.gene_annotations, sep="\t", dtype="str", index_col=None)
+    gene_types_df = pd.read_csv(gene_annotations, sep="\t", dtype="str", index_col=None)
+
     # replace pathogen attribute with host attribute which is present in quantification results
     pathogen_attribute = gene_types_df.columns[0]
-    gene_types_df.rename(columns={pathogen_attribute: args.gene_attribute}, inplace=True)
+    gene_types_df.rename(columns={pathogen_attribute: gene_attribute}, inplace=True)
+
     # create dictionary with information from annotations for each transcript/gene
     gene_types = gene_types_df.to_dict("records")
+
     # list of unique gene types present in annotations
     set_gene_types_pathogen = list(set([gene["gene_type"] for gene in gene_types]))
-    # create dictionary {'name of main RNA class': 'corresponding RNA class present in annotations'}, e.g. {'sRNA':'sRNA'}
+
+    # create dictionary
+    # {'name of main RNA class': 'corresponding RNA class present in annotations'}, e.g. {'sRNA':'sRNA'}
     dict_set_RNA_classes = create_dictionary_of_RNA_classes_from_set(set_gene_types_pathogen, set_gene_types_pathogen)
 
-elif args.organism == "host":
+    return gene_types, dict_set_RNA_classes
+
+
+def process_host(gene_annotations, rna_classes):
     # read annotation file
-    gene_types_df = pd.read_csv(args.gene_annotations, sep="\t", dtype="str", index_col=None)
+    gene_types_df = pd.read_csv(gene_annotations, sep="\t", dtype="str", index_col=None)
+
     # create dictionary from annotation file
     gene_types = gene_types_df.to_dict("records")
+
     # create list of avaiable gene types
     set_gene_types_host = list(set([gene["gene_type"] for gene in gene_types]))
+
     # read groups of rna classes
-    RNA_classes_to_replce_df = pd.read_csv(args.rna_classes, sep="\t", dtype="str", index_col=None)
+    RNA_classes_to_replce_df = pd.read_csv(rna_classes, sep="\t", dtype="str", index_col=None)
+
     # create dictionary of RNA classes for each entry (line of the RNA_classes_to_replace.tsv file)
     RNA_classes_to_replce = RNA_classes_to_replce_df.to_dict("records")
 
-    # create dictionary with grouped subclasses of RNA and their main RNA class, e.g. {'CDS': ['IG_LV_gene', 'IG_C_gene'],'pseudogene': ['pseudogene', 'transcribed_unprocessed_pseudogene']}
+    # create dictionary with grouped subclasses of RNA and their main RNA class,
+    # e.g. {'CDS': ['IG_LV_gene', 'IG_C_gene'],'pseudogene': ['pseudogene', 'transcribed_unprocessed_pseudogene']}
     grouped_RNA_classes = defaultdict(list)
     for d in RNA_classes_to_replce:
         for key, value in d.items():
@@ -179,7 +194,8 @@ elif args.organism == "host":
         v = [x for x in v if str(x) != "nan"]
         rna_to_replace.update({k: v})
 
-    # remove RNA subclasses defined in RNA_classes_to_replace.tsv from set_gene_types_host before creating final dictionary
+    # remove RNA subclasses defined in RNA_classes_to_replace.tsv from set_gene_types_host
+    # before creating final dictionary
     for RNA_class, RNA_class_to_replace in list(rna_to_replace.items()):
         set_gene_types_host = [elem for elem in set_gene_types_host if elem not in RNA_class_to_replace]
 
@@ -189,8 +205,24 @@ elif args.organism == "host":
     # add grouped_RNA_classes dict. into dict_set_RNA_classes dict.
     dict_set_RNA_classes.update(rna_to_replace)
 
+    return gene_types, dict_set_RNA_classes
 
-# calculate RNA class statistics for either host or pathogen
-RNA_classes_for_each_sample(
-    args.quantification_table, gene_types, dict_set_RNA_classes, args.organism, args.quantifier, args.gene_attribute
-)
+
+def main():
+    args = parse_args()
+
+    if args.organism == "pathogen":
+        gene_types, dict_set_RNA_classes = process_pathogen(args.gene_annotations, args.gene_attribute)
+    elif args.organism == "host":
+        gene_types, dict_set_RNA_classes = process_host(args.gene_annotations, args.rna_classes)
+    else:
+        raise ValueError("Wrong value of organism (allowed values: 'pathogen', 'host')")
+
+    # calculate RNA class statistics for either host or pathogen
+    RNA_classes_for_each_sample(
+        args.quantification_table, gene_types, dict_set_RNA_classes, args.organism, args.quantifier, args.gene_attribute
+    )
+
+
+if __name__ == "__main__":
+    main()

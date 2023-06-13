@@ -11,8 +11,19 @@ WorkflowDualrnaseq.initialise(params, log)
 
 // TODO nf-core: Add all file path parameters for the pipeline to the list below
 // Check input path parameters to see if they exist
-def checkPathParamList = [ params.input, params.multiqc_config, params.fasta_host ]
+def checkPathParamList = [
+    params.input,
+    params.multiqc_config,
+    // host
+    params.fasta_host,
+    params.gff_host,
+    params.gff_host_tRNA,
+    // pathogen
+    params.fasta_pathogen,
+    params.gff_pathogen,
+]
 for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true) } }
+
 
 // Check mandatory parameters
 if (params.input) { ch_input = file(params.input) } else { exit 1, 'Input samplesheet not specified!' }
@@ -38,7 +49,9 @@ ch_multiqc_custom_methods_description = params.multiqc_methods_description ? fil
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
 include { INPUT_CHECK } from '../subworkflows/local/input_check'
+include { PREPARE_REFERENCE_FILES } from '../subworkflows/local/prepare_reference_files'
 include { SALMON_SELECTIVE_ALIGNMENT } from '../subworkflows/local/salmon_selective_alignment'
+include { SALMON_ALIGNMENT_BASED } from '../subworkflows/local/salmon_alignment_based'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -49,9 +62,11 @@ include { SALMON_SELECTIVE_ALIGNMENT } from '../subworkflows/local/salmon_select
 //
 // MODULE: Installed directly from nf-core/modules
 //
-include { FASTQC                      } from '../modules/nf-core/fastqc/main'
-include { MULTIQC                     } from '../modules/nf-core/multiqc/main'
-include { CUSTOM_DUMPSOFTWAREVERSIONS } from '../modules/nf-core/custom/dumpsoftwareversions/main'
+include { FASTQC                            } from '../modules/nf-core/fastqc/main'
+include { FASTQC as FASTQC_AFTER_TRIMMING   } from '../modules/nf-core/fastqc/main'
+include { CUTADAPT                          } from '../modules/nf-core/cutadapt/main'
+include { MULTIQC                           } from '../modules/nf-core/multiqc/main'
+include { CUSTOM_DUMPSOFTWAREVERSIONS       } from '../modules/nf-core/custom/dumpsoftwareversions/main'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -74,37 +89,66 @@ workflow DUALRNASEQ {
     )
     ch_versions = ch_versions.mix(INPUT_CHECK.out.versions)
 
-    //
-    // MODULE: Run FastQC
-    //
-    FASTQC (
-        INPUT_CHECK.out.reads
-    )
-    ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+    if (!(params.skip_tools && params.skip_tools.split(',').contains('fastqc'))) {
+            FASTQC(INPUT_CHECK.out.reads)
+            ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+    }
 
-    //
-    // SUBWORKFLOW: Create salmon index and run the quantification
-    //
-    ch_genome_fasta     = Channel.fromPath(params.fasta_host, checkIfExists: true)
-    ch_transcript_fasta = Channel.fromPath(params.transcript_fasta, checkIfExists: true)
-    // TODO change to gff in the future
-    ch_gtf              = Channel.fromPath(params.gff_host, checkIfExists: true)
+    ch_reads = INPUT_CHECK.out.reads
+    if (!(params.skip_tools && params.skip_tools.split(',').contains('cutadapt'))) {
+            CUTADAPT(INPUT_CHECK.out.reads)
+            ch_reads = CUTADAPT.out.reads
+            ch_versions = ch_versions.mix(CUTADAPT.out.versions.first())
+    }
 
-    SALMON_SELECTIVE_ALIGNMENT (
-        INPUT_CHECK.out.reads,
-        ch_genome_fasta,
-        ch_transcript_fasta,
-        ch_gtf
+    if (!(params.skip_tools && (params.skip_tools.split(',').contains('fastqc') || params.skip_tools.split(',').contains('cutadapt')))) {
+            FASTQC_AFTER_TRIMMING(ch_reads)
+            ch_versions = ch_versions.mix(FASTQC_AFTER_TRIMMING.out.versions.first())
+    }
+
+
+
+    PREPARE_REFERENCE_FILES(
+        params.fasta_host,
+        params.gff_host,
+        params.gff_host_tRNA,
+        params.fasta_pathogen,
+        params.gff_pathogen
     )
-    ch_versions = ch_versions.mix(SALMON_SELECTIVE_ALIGNMENT.out.versions)
+
+    if ( params.run_salmon_selective_alignment ) {
+        SALMON_SELECTIVE_ALIGNMENT (
+            ch_reads,
+            PREPARE_REFERENCE_FILES.out.genome_fasta,
+            PREPARE_REFERENCE_FILES.out.transcript_fasta,
+            PREPARE_REFERENCE_FILES.out.host_pathoge_gff,
+            PREPARE_REFERENCE_FILES.out.transcript_fasta_pathogen,
+            PREPARE_REFERENCE_FILES.out.transcript_fasta_host
+        )
+        ch_versions = ch_versions.mix(SALMON_SELECTIVE_ALIGNMENT.out.versions)
+    }
+
+    if ( params.run_salmon_alignment_based_mode ) {
+        SALMON_ALIGNMENT_BASED (
+            ch_reads,
+            PREPARE_REFERENCE_FILES.out.genome_fasta,
+            PREPARE_REFERENCE_FILES.out.transcript_fasta,
+            PREPARE_REFERENCE_FILES.out.host_pathoge_gff,
+            PREPARE_REFERENCE_FILES.out.transcript_fasta_pathogen,
+            PREPARE_REFERENCE_FILES.out.transcript_fasta_host
+        )
+        ch_versions = ch_versions.mix(SALMON_ALIGNMENT_BASED.out.versions)
+    }
+
+
 
     CUSTOM_DUMPSOFTWAREVERSIONS (
         ch_versions.unique().collectFile(name: 'collated_versions.yml')
     )
 
-    //
+
     // MODULE: MultiQC
-    //
+
     workflow_summary    = WorkflowDualrnaseq.paramsSummaryMultiqc(workflow, summary_params)
     ch_workflow_summary = Channel.value(workflow_summary)
 
@@ -124,7 +168,10 @@ workflow DUALRNASEQ {
         ch_multiqc_logo.toList()
     )
     multiqc_report = MULTIQC.out.report.toList()
+
+
 }
+
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -137,23 +137,6 @@ def RNA_classes_for_each_sample(
     df_percentage_RNA_all_samples.to_csv(organism + "_RNA_classes_percentage_" + quantifier + ".tsv", sep="\t")
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="""RNA class statistics""")
-    parser.add_argument(
-        "-q", "--quantification_table", metavar="<quantification_table>", help="Path to the quantification table"
-    )
-    parser.add_argument("-a", "--gene_attribute", help="gene attribute")
-    parser.add_argument("-annotations", "--gene_annotations", help="gene annotations")
-    parser.add_argument("-q_tool", "--quantifier", metavar="<quantifier>", help="name of the quantifier")
-    parser.add_argument("-org", "--organism", help="host or pathogen")
-    parser.add_argument("-rna", "--rna_classes", help="group of RNA classes to be replaced", default="")
-    parser.add_argument("-o", "--output_dir", metavar="<output>", help="output dir", default=".")
-
-    args = parser.parse_args()
-
-    return args
-
-
 def process_pathogen(gene_annotations, gene_attribute):
     # read annotation file
     gene_types_df = pd.read_csv(gene_annotations, sep="\t", dtype="str", index_col=None)
@@ -216,6 +199,23 @@ def process_host(gene_annotations, rna_classes):
     dict_set_RNA_classes.update(rna_to_replace)
 
     return gene_types, dict_set_RNA_classes
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="""RNA class statistics""")
+    parser.add_argument(
+        "-q", "--quantification_table", metavar="<quantification_table>", help="Path to the quantification table"
+    )
+    parser.add_argument("-a", "--gene_attribute", help="gene attribute")
+    parser.add_argument("-annotations", "--gene_annotations", help="gene annotations")
+    parser.add_argument("-q_tool", "--quantifier", metavar="<quantifier>", help="name of the quantifier")
+    parser.add_argument("-org", "--organism", help="host or pathogen")
+    parser.add_argument("-rna", "--rna_classes", help="group of RNA classes to be replaced", default="")
+    parser.add_argument("-o", "--output_dir", metavar="<output>", help="output dir", default=".")
+
+    args = parser.parse_args()
+
+    return args
 
 
 def main():

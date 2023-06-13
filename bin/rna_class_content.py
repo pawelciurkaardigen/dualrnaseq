@@ -10,8 +10,7 @@ Description:
 Input files:
     - tsv quantification table,
     - tsv annotation table created with extract_annotations_from_gff.py
-    - (optional) RNA_classes_to_replace.tsv to group subclasses into main RNA classes
-    for calculating the statistics (available for host)
+    - (optional) RNA_classes_to_replace.tsv to group subclasses into main RNA classes for calculating the statistics (available for host)
 Output files:
     - RNA_classes_percentage_*.tsv,
     - RNA_classes_sum_counts*.tsv,

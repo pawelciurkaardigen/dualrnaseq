@@ -5,10 +5,17 @@ Created on Wed Aug 14 10:20:19 2019
 
 @author: B. Mika-Gospodorz
 
-Input files: tsv quantification table, tsv annotation table created with extract_annotations_from_gff.py , optional: RNA_classes_to_replace.tsv to group subclasses into main RNA classes for calculating the statistics (available for host)
-Output files: RNA_classes_percentage_*.tsv, RNA_classes_sum_counts*.tsv, gene_types_groups_*.tsv
-Description: Used to calculate mapping statistics of RNA classes.
-
+Description:
+    Used to calculate mapping statistics of RNA classes.
+Input files:
+    - tsv quantification table,
+    - tsv annotation table created with extract_annotations_from_gff.py
+    - (optional) RNA_classes_to_replace.tsv to group subclasses into main RNA classes
+    for calculating the statistics (available for host)
+Output files:
+    - RNA_classes_percentage_*.tsv,
+    - RNA_classes_sum_counts*.tsv,
+    - gene_types_groups_*.tsv
 """
 
 import argparse
@@ -30,7 +37,8 @@ def calculate_percentage_RNA_classes(RNA_classes_sum_counts):
 
 # function to add counts to 'gene_types' dict. with gene annotations
 def add_counts_to_genes(quantification_df, gene_types, feature):
-    # add counts from quantification for each gene/transcripts present in annotation dict., if gene_id/transcript_id is missing in quantification, set counts to 0.
+    # add counts from quantification for each gene/transcripts present in annotation dict.,
+    # if gene_id/transcript_id is missing in quantification, set counts to 0.
     for id_gene in gene_types:
         if id_gene[feature] in quantification_df.index:
             id_gene["counts"] = quantification_df.at[id_gene[feature]]
@@ -113,10 +121,13 @@ def RNA_classes_for_each_sample(
             df_percentage_RNA_all_samples = pd.concat(
                 [df_percentage_RNA_all_samples, percentage_RNA_class.T], sort=True
             )
+
     # remove missing values from data frames
     df_percentage_RNA_all_samples = df_percentage_RNA_all_samples.dropna()
     df_RNA_classes_sum_counts_all_samples = df_RNA_classes_sum_counts_all_samples.dropna()
-    # check it data frame contains any non zero value. If so, teturn 'true' and plot RNA class statistics in another process
+
+    # check it data frame contains any non zero value.
+    # If so, teturn 'true' and plot RNA class statistics in another process
     non_zero = df_RNA_classes_sum_counts_all_samples.any()
     if non_zero.any():
         print("true")
